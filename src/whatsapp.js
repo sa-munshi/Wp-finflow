@@ -1,18 +1,22 @@
 const fetch = require('node-fetch')
 
-const PHONE_ID = process.env.WHATSAPP_PHONE_ID
-const TOKEN = process.env.WHATSAPP_TOKEN
-const API_URL = `https://graph.facebook.com/v19.0/${PHONE_ID}/messages`
+function getApiUrl() {
+  return `https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_ID}/messages`
+}
+
+function getHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`
+  }
+}
 
 // Send a plain text message
 async function sendMessage(to, text) {
   try {
-    const res = await fetch(API_URL, {
+    const res = await fetch(getApiUrl(), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${TOKEN}`
-      },
+      headers: getHeaders(),
       body: JSON.stringify({
         messaging_product: 'whatsapp',
         to,
@@ -28,15 +32,33 @@ async function sendMessage(to, text) {
   }
 }
 
+// Send an image message with optional caption
+async function sendImage(to, imageUrl, caption = '') {
+  try {
+    const res = await fetch(getApiUrl(), {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to,
+        type: 'image',
+        image: { link: imageUrl, caption }
+      })
+    })
+    const data = await res.json()
+    if (data.error) console.error('[WA Image Error]', data.error)
+    return data
+  } catch (err) {
+    console.error('[WA Image Failed]', err.message)
+  }
+}
+
 // Send interactive buttons (confirm/cancel)
 async function sendButtons(to, bodyText, buttons) {
   try {
-    const res = await fetch(API_URL, {
+    const res = await fetch(getApiUrl(), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${TOKEN}`
-      },
+      headers: getHeaders(),
       body: JSON.stringify({
         messaging_product: 'whatsapp',
         to,
@@ -64,23 +86,22 @@ async function sendButtons(to, bodyText, buttons) {
 // Mark message as read
 async function markRead(messageId) {
   try {
-    await fetch(API_URL.replace('/messages', '/messages'), {
+    await fetch(getApiUrl(), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${TOKEN}`
-      },
+      headers: getHeaders(),
       body: JSON.stringify({
         messaging_product: 'whatsapp',
         status: 'read',
         message_id: messageId
       })
     })
-  } catch (err) { /* silent */ }
+  } catch (err) {
+    console.error('[WA markRead Failed]', err.message)
+  }
 }
 
 function formatINR(amount) {
   return `₹${Number(amount).toLocaleString('en-IN')}`
 }
 
-module.exports = { sendMessage, sendButtons, markRead, formatINR }
+module.exports = { sendMessage, sendImage, sendButtons, markRead, formatINR }

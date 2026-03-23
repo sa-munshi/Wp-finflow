@@ -1,116 +1,173 @@
-const fs = require('fs')
-const path = require('path')
+const { createClient } = require('@supabase/supabase-js')
 
-const DB_FILE = path.join(__dirname, '../data/transactions.json')
+// ─── Supabase client (service role for server-side access) ────────────────────
+let supabase = null
 
-// Ensure data directory exists
-function ensureDir() {
-  const dir = path.dirname(DB_FILE)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+function getSupabase() {
+  if (!supabase) {
+    const url = process.env.SUPABASE_URL
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!url || !key) {
+      throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required')
+    }
+    supabase = createClient(url, key)
+  }
+  return supabase
 }
 
-// Load all data
-function loadAll() {
-  ensureDir()
-  if (!fs.existsSync(DB_FILE)) return {}
+// ─── Normalize phone number ──────────────────────────────────────────────────
+// WhatsApp sends "919046939869", we store the same format in settings table
+function normalizePhone(phone) {
+  return phone.replace(/[^0-9]/g, '')
+}
+
+// ─── Get user by WhatsApp phone ──────────────────────────────────────────────
+async function getUserByPhone(phone) {
   try {
-    return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'))
-  } catch (e) {
-    return {}
+    const normalized = normalizePhone(phone)
+    const { data, error } = await getSupabase()
+      .from('settings')
+      .select('user_id, name')
+      .eq('whatsapp_phone', normalized)
+      .single()
+
+    if (error || !data) return null
+    return { user_id: data.user_id, name: data.name || 'User' }
+  } catch (err) {
+    console.error('[DB] getUserByPhone error:', err.message)
+    return null
   }
 }
 
-// Save all data
-function saveAll(data) {
-  ensureDir()
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2))
-}
-
-// ─── TEST USERS ───────────────────────────────────────────────────────────────
-// phone → { name, connected }
-const TEST_USERS = {
-  "919046939869": { name: "Sadab", connected: true }
-  // add more: "91xxxxxxxxxx": { name: "Name", connected: true }
-}
-
-// Get user by phone
-function getUserByPhone(phone) {
-  const user = TEST_USERS[phone]
-  if (!user || !user.connected) return null
-  return { user_id: phone, name: user.name }
-}
-
-// Disconnect user
-function disconnectUser(phone) {
-  if (TEST_USERS[phone]) {
-    TEST_USERS[phone].connected = false
-    return true
-  }
-  return false
-}
-
-// Reconnect user (for testing)
-function reconnectUser(phone) {
-  if (TEST_USERS[phone]) {
-    TEST_USERS[phone].connected = true
-    return true
-  }
-  return false
-}
-
-// Save transaction locally
-function saveTransaction(userId, parsed) {
+// ─── Disconnect user (clear whatsapp_phone) ──────────────────────────────────
+async function disconnectUser(phone) {
   try {
-    const all = loadAll()
-    if (!all[userId]) all[userId] = []
+    const normalized = normalizePhone(phone)
+    const { error } = await getSupabase()
+      .from('settings')
+      .update({ whatsapp_phone: null })
+      .eq('whatsapp_phone', normalized)
 
-    const tx = {
-      id: Date.now().toString(),
-      amount: Number(parsed.amount),
-      type: parsed.type || 'expense',
-      category: parsed.category || 'Other',
-      note: parsed.note || '',
-      date: parsed.date || new Date().toISOString().split('T')[0],
-      saved_at: new Date().toISOString()
+    if (error) {
+      console.error('[DB] disconnectUser error:', error.message)
+      return false
+    }
+    return true
+  } catch (err) {
+    console.error('[DB] disconnectUser error:', err.message)
+    return false
+  }
+}
+
+// ─── Save transaction to Supabase ────────────────────────────────────────────
+async function saveTransaction(userId, parsed) {
+  try {
+    const now = new Date()
+    const istOffset = 5.5 * 60 * 60 * 1000
+    const istTime = new Date(now.getTime() + istOffset)
+
+    const { data, error } = await getSupabase()
+      .from('transactions')
+      .insert({
+        user_id: userId,
+        amount: Number(parsed.amount),
+        type: parsed.type || 'expense',
+        category: parsed.category || 'Other',
+        note: parsed.note || '',
+        date: parsed.date || istTime.toISOString().split('T')[0],
+        created_at: istTime.toISOString()
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('[DB] saveTransaction error:', error.message)
+      return { data: null, error: error.message }
     }
 
-    all[userId].push(tx)
-    saveAll(all)
-    console.log('[LOCAL] Saved transaction:', tx)
-    return { data: tx, error: null }
+    console.log('[DB] Saved transaction:', data.id)
+    return { data, error: null }
   } catch (err) {
-    console.error('[LOCAL] Save failed:', err.message)
+    console.error('[DB] saveTransaction error:', err.message)
     return { data: null, error: err.message }
   }
 }
 
-// Get last 5 transactions
-function getTransactions(userId) {
-  const all = loadAll()
-  return (all[userId] || []).slice(-5).reverse()
+// ─── Get last 5 transactions ─────────────────────────────────────────────────
+async function getTransactions(userId) {
+  try {
+    const { data, error } = await getSupabase()
+      .from('transactions')
+      .select('amount, type, category, note, date')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(5)
+
+    if (error) {
+      console.error('[DB] getTransactions error:', error.message)
+      return []
+    }
+    return data || []
+  } catch (err) {
+    console.error('[DB] getTransactions error:', err.message)
+    return []
+  }
 }
 
-// Get balance summary
-function getBalance(userId) {
-  const all = loadAll()
-  const txs = all[userId] || []
-  const income = txs.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
-  const expense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
-  return { income, expense, balance: income - expense }
+// ─── Get all-time balance summary ────────────────────────────────────────────
+async function getBalance(userId) {
+  try {
+    const { data, error } = await getSupabase()
+      .from('transactions')
+      .select('amount, type')
+      .eq('user_id', userId)
+
+    if (error) {
+      console.error('[DB] getBalance error:', error.message)
+      return { income: 0, expense: 0, balance: 0 }
+    }
+
+    const txs = data || []
+    const income = txs.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
+    const expense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
+    return { income, expense, balance: income - expense }
+  } catch (err) {
+    console.error('[DB] getBalance error:', err.message)
+    return { income: 0, expense: 0, balance: 0 }
+  }
 }
 
-// Get this month's balance
-function getMonthlyBalance(userId) {
-  const all = loadAll()
-  const txs = all[userId] || []
-  const month = new Date().toISOString().slice(0, 7)
-  const monthTxs = txs.filter(t => t.date && t.date.startsWith(month))
-  const income = monthTxs.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
-  const expense = monthTxs.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
-  return { income, expense, balance: income - expense }
+// ─── Get this month's balance ────────────────────────────────────────────────
+async function getMonthlyBalance(userId) {
+  try {
+    const now = new Date()
+    const istOffset = 5.5 * 60 * 60 * 1000
+    const istTime = new Date(now.getTime() + istOffset)
+    const monthPrefix = istTime.toISOString().slice(0, 7)
+
+    const { data, error } = await getSupabase()
+      .from('transactions')
+      .select('amount, type')
+      .eq('user_id', userId)
+      .gte('date', `${monthPrefix}-01`)
+      .lte('date', `${monthPrefix}-31`)
+
+    if (error) {
+      console.error('[DB] getMonthlyBalance error:', error.message)
+      return { income: 0, expense: 0, balance: 0 }
+    }
+
+    const txs = data || []
+    const income = txs.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
+    const expense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
+    return { income, expense, balance: income - expense }
+  } catch (err) {
+    console.error('[DB] getMonthlyBalance error:', err.message)
+    return { income: 0, expense: 0, balance: 0 }
+  }
 }
 
-// ─── Welcome seen tracker (in-memory) ────────────────────────────────────────
+// ─── Welcome seen tracker (in-memory, resets on restart) ─────────────────────
 const welcomeSeen = new Set()
 
 function hasSeenWelcome(phone) {
@@ -124,7 +181,6 @@ function markWelcomeSeen(phone) {
 module.exports = {
   getUserByPhone,
   disconnectUser,
-  reconnectUser,
   saveTransaction,
   getTransactions,
   getBalance,
