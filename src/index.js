@@ -171,8 +171,8 @@ async function handleButtonReply(from, buttonId) {
       `Added to FinFlow`
     )
 
-    // Done
-    clearSession(from)
+    return
+  }
 
   if (buttonId === 'cancel') {
     clearSession(from)
