@@ -1,5 +1,6 @@
 require('dotenv').config()
 const express = require('express')
+const fetch = require('node-fetch')
 const { parseTextWithAI, parsePhotoWithAI, downloadWhatsAppMedia } = require('./ai')
 const {
   getUserByPhone,
@@ -24,9 +25,19 @@ const BASE_URL = process.env.APP_URL || 'https://app.sadabmunshi.online'
 const WELCOME_IMAGE = `${BASE_URL}/finflow-logo.png`
 
 // ─── Startup check ────────────────────────────────────────────────────────────
-const required = ['WHATSAPP_TOKEN', 'WHATSAPP_PHONE_ID', 'WHATSAPP_VERIFY_TOKEN', 'SARVAM_API_KEY']
+const required = [
+  'WHATSAPP_TOKEN',
+  'WHATSAPP_PHONE_ID',
+  'WHATSAPP_VERIFY_TOKEN',
+  'SARVAM_API_KEY',
+  'GEMINI_API_KEY',
+  'SUPABASE_URL',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'APP_URL',
+  'WEBHOOK_SECRET'
+]
 for (const key of required) {
-  if (!process.env[key]) console.error(`[STARTUP] Missing: ${key}`)
+  if (!process.env[key]) console.warn(`[STARTUP] ⚠️  Missing env var: ${key}`)
 }
 
 // ─── Health ───────────────────────────────────────────────────────────────────
@@ -47,43 +58,52 @@ app.get('/webhook', (req, res) => {
 })
 
 // ─── Webhook handler ──────────────────────────────────────────────────────────
-app.post('/webhook', async (req, res) => {
+app.post('/webhook', (req, res) => {
   res.sendStatus(200)
+
+  const body = req.body
+  if (body.object !== 'whatsapp_business_account') return
+  const value = body.entry?.[0]?.changes?.[0]?.value
+  if (!value?.messages) return
+
+  const message = value.messages[0]
+  const from = message.from
+
+  processMessage(from, message).catch(err => {
+    console.error('[Webhook Error]', err.message)
+  })
+})
+
+// ─── Process incoming message (async, non-blocking) ───────────────────────────
+async function processMessage(from, message) {
   try {
-    const body = req.body
-    if (body.object !== 'whatsapp_business_account') return
-    const value = body.entry?.[0]?.changes?.[0]?.value
-    if (!value?.messages) return
-
-    const message = value.messages[0]
-    const from = message.from
-
     await markRead(message.id)
 
-    // Button reply
     if (message.type === 'interactive') {
       await handleButtonReply(from, message.interactive?.button_reply?.id)
       return
     }
 
-    // Photo/image
     if (message.type === 'image') {
       await handlePhotoMessage(from, message.image)
       return
     }
 
-    // Text
     if (message.type === 'text') {
       await handleTextMessage(from, message.text.body.trim())
       return
     }
 
     await sendMessage(from, '📝 Please send a text message or photo receipt.')
-
   } catch (err) {
-    console.error('[Webhook Error]', err.message)
+    console.error('[Process Error]', err.message)
+    try {
+      await sendMessage(from, '⚠️ Something went wrong. Please try again.')
+    } catch (e) {
+      console.error('[Recovery Message Failed]', e.message)
+    }
   }
-})
+}
 
 // ─── Handle text messages ─────────────────────────────────────────────────────
 async function handleTextMessage(from, text) {
@@ -101,7 +121,7 @@ async function handleTextMessage(from, text) {
         )
         await new Promise(r => setTimeout(r, 800))
       } catch (e) {
-        // Image failed, continue with text
+        console.error('[Welcome Image Failed]', e.message)
       }
     }
     await sendMessage(from,
@@ -139,8 +159,9 @@ async function handleTextMessage(from, text) {
   }
 
   // Balance
-  if (lower === 'balance' || lower === 'check my balance' || lower === '/balance') {
-    const b = getBalance(user.user_id)
+  const balanceCommands = ['balance', '/balance', 'check my balance', 'check balance']
+  if (balanceCommands.includes(lower)) {
+    const b = await getBalance(user.user_id)
     const savingsRate = b.income > 0
       ? Math.round(((b.income - b.expense) / b.income) * 100)
       : 0
@@ -159,8 +180,8 @@ async function handleTextMessage(from, text) {
 
   // Monthly
   if (lower === 'monthly' || lower === '/monthly') {
-    const m = getMonthlyBalance(user.user_id)
-    const month = new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' })
+    const m = await getMonthlyBalance(user.user_id)
+    const month = new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })
     const savingsRate = m.income > 0
       ? Math.round(((m.income - m.expense) / m.income) * 100)
       : 0
@@ -177,8 +198,8 @@ async function handleTextMessage(from, text) {
   }
 
   // Recent
-  if (lower === 'recent' || lower === '/recent' || lower === 'add a transaction' && false) {
-    const txs = getTransactions(user.user_id)
+  if (lower === 'recent' || lower === '/recent') {
+    const txs = await getTransactions(user.user_id)
     if (!txs.length) {
       await sendMessage(from, '📭 No transactions yet.\n\nType something like _"spent 500 on lunch"_ to add one.')
       return
@@ -253,9 +274,25 @@ async function handlePhotoMessage(from, image) {
 
   await sendMessage(from, '🔍 _Scanning your receipt..._')
 
-  const fileData = await downloadWhatsAppMedia(image.id)
+  let fileData
+  try {
+    fileData = await downloadWhatsAppMedia(image.id)
+  } catch (err) {
+    console.error('[Photo Download Error]', err.message)
+    await sendMessage(from,
+      `❌ *Could not download image*\n\n` +
+      `Please try sending the photo again.\n` +
+      `Or type the transaction manually.`
+    )
+    return
+  }
+
   if (!fileData) {
-    await sendMessage(from, '❌ Could not download image. Please try again.')
+    await sendMessage(from,
+      `❌ *Could not download image*\n\n` +
+      `Please try sending the photo again.\n` +
+      `Or type the transaction manually.`
+    )
     return
   }
 
@@ -285,7 +322,8 @@ async function showTransactionPreview(from, parsed, userId) {
   const preview =
     `${typeEmoji} *Transaction Preview*\n` +
     `──────────────────\n` +
-    `*${formatINR(parsed.amount)}*  ·  ${typeLabel}\n` +
+    `💵  *${formatINR(parsed.amount)}*\n` +
+    `📊  ${typeLabel}\n` +
     `📂  ${parsed.category}\n` +
     `📅  ${parsed.date}\n` +
     `📝  ${parsed.note || '—'}\n` +
@@ -296,6 +334,26 @@ async function showTransactionPreview(from, parsed, userId) {
     { id: 'confirm_save', title: '✅ Save' },
     { id: 'cancel', title: '❌ Cancel' }
   ])
+}
+
+// ─── Trigger budget alert (non-blocking) ──────────────────────────────────────
+async function triggerBudgetAlert(userId) {
+  try {
+    const appUrl = process.env.APP_URL
+    const secret = process.env.WEBHOOK_SECRET
+    if (!appUrl || !secret) return
+
+    await fetch(`${appUrl}/api/notifications/budget-alert`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-bot-secret': secret
+      },
+      body: JSON.stringify({ user_id: userId })
+    })
+  } catch (err) {
+    console.error('[Budget Alert Error]', err.message)
+  }
 }
 
 // ─── Handle button replies ────────────────────────────────────────────────────
@@ -314,6 +372,7 @@ async function handleButtonReply(from, buttonId) {
       return
     }
     const p = session.pending
+    const userId = session.userId
     clearSession(from)
     const typeEmoji = p.type === 'income' ? '🟢' : '🔴'
     const typeLabel = p.type === 'income' ? 'Income' : 'Expense'
@@ -327,12 +386,18 @@ async function handleButtonReply(from, buttonId) {
       `──────────────────\n` +
       `_Open the app to view all transactions_`
     )
+
+    if (p.type === 'expense') {
+      triggerBudgetAlert(userId).catch(err => {
+        console.error('[Budget Alert Fire Error]', err.message)
+      })
+    }
     return
   }
 
   // Disconnect confirm
   if (buttonId === 'confirm_disconnect') {
-    disconnectUser(from)
+    await disconnectUser(from)
     clearSession(from)
     await sendMessage(from,
       `✅ *Account Disconnected*\n\n` +
