@@ -21,6 +21,22 @@ function normalizePhone(phone) {
   return phone.replace(/[^0-9]/g, '')
 }
 
+// ─── Get current IST date/time ───────────────────────────────────────────────
+// India does not observe DST, so fixed +5:30 offset is safe
+function getISTNow() {
+  const now = new Date()
+  const istOffset = 5.5 * 60 * 60 * 1000
+  return new Date(now.getTime() + istOffset)
+}
+
+function getISTDateString() {
+  return getISTNow().toISOString().split('T')[0]
+}
+
+function getISTMonthPrefix() {
+  return getISTNow().toISOString().slice(0, 7)
+}
+
 // ─── Get user by WhatsApp phone ──────────────────────────────────────────────
 async function getUserByPhone(phone) {
   try {
@@ -62,9 +78,7 @@ async function disconnectUser(phone) {
 // ─── Save transaction to Supabase ────────────────────────────────────────────
 async function saveTransaction(userId, parsed) {
   try {
-    const now = new Date()
-    const istOffset = 5.5 * 60 * 60 * 1000
-    const istTime = new Date(now.getTime() + istOffset)
+    const istTime = getISTNow()
 
     const { data, error } = await getSupabase()
       .from('transactions')
@@ -74,7 +88,7 @@ async function saveTransaction(userId, parsed) {
         type: parsed.type || 'expense',
         category: parsed.category || 'Other',
         note: parsed.note || '',
-        date: parsed.date || istTime.toISOString().split('T')[0],
+        date: parsed.date || getISTDateString(),
         created_at: istTime.toISOString()
       })
       .select()
@@ -140,10 +154,7 @@ async function getBalance(userId) {
 // ─── Get this month's balance ────────────────────────────────────────────────
 async function getMonthlyBalance(userId) {
   try {
-    const now = new Date()
-    const istOffset = 5.5 * 60 * 60 * 1000
-    const istTime = new Date(now.getTime() + istOffset)
-    const monthPrefix = istTime.toISOString().slice(0, 7)
+    const monthPrefix = getISTMonthPrefix()
 
     const { data, error } = await getSupabase()
       .from('transactions')

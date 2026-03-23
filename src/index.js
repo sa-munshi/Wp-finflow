@@ -159,7 +159,8 @@ async function handleTextMessage(from, text) {
   }
 
   // Balance
-  if (lower === 'balance' || lower === '/balance' || lower === 'check my balance' || lower === 'check balance') {
+  const balanceCommands = ['balance', '/balance', 'check my balance', 'check balance']
+  if (balanceCommands.includes(lower)) {
     const b = await getBalance(user.user_id)
     const savingsRate = b.income > 0
       ? Math.round(((b.income - b.expense) / b.income) * 100)
