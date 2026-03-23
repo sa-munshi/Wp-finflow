@@ -30,10 +30,9 @@ function saveAll(data) {
 // Add your WhatsApp number here (no + or spaces)
 // "+91 90469 39869" → "919046939869"
 const TEST_USERS = {
-  "919046939869": "Sadab"
-  // add more: "91xxxxxxxxxx": "Name"
+  "919046939869": "Sadab",
+  "917407486131": "Sadab"  // ← add this line
 }
-
 // Get user by phone
 function getUserByPhone(phone) {
   const name = TEST_USERS[phone]
