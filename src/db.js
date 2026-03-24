@@ -75,6 +75,40 @@ async function connectUser(userId, phone) {
   }
 }
 
+// ─── Connect user by whatsapp_connect_code (Supabase lookup) ─────────────────
+async function connectUserByCode(rawCode, phone) {
+  try {
+    const code = rawCode.trim().toUpperCase()
+    const normalized = normalizePhone(phone)
+
+    // Look up user by connect code (stored and compared as uppercase)
+    const { data, error } = await getSupabase()
+      .from('settings')
+      .select('user_id')
+      .eq('whatsapp_connect_code', code)
+      .limit(1)
+      .single()
+
+    if (error || !data) return { ok: false, found: false }
+
+    // Update phone and clear the one-time code
+    const { error: updateError } = await getSupabase()
+      .from('settings')
+      .update({ whatsapp_phone: normalized, whatsapp_connect_code: null })
+      .eq('user_id', data.user_id)
+
+    if (updateError) {
+      console.error('[DB] connectUserByCode update error:', updateError.message)
+      return { ok: false, found: true }
+    }
+
+    return { ok: true, found: true }
+  } catch (err) {
+    console.error('[DB] connectUserByCode error:', err.message)
+    return { ok: false, found: false }
+  }
+}
+
 // ─── Disconnect user (clear whatsapp_phone) ──────────────────────────────────
 async function disconnectUser(phone) {
   try {
@@ -212,6 +246,7 @@ function markWelcomeSeen(phone) {
 module.exports = {
   getUserByPhone,
   connectUser,
+  connectUserByCode,
   disconnectUser,
   saveTransaction,
   getTransactions,

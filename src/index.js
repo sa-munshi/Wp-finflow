@@ -5,6 +5,7 @@ const { parseTextWithAI, parsePhotoWithAI, downloadWhatsAppMedia } = require('./
 const {
   getUserByPhone,
   connectUser,
+  connectUserByCode,
   disconnectUser,
   saveTransaction,
   getTransactions,
@@ -117,29 +118,29 @@ async function handleTextMessage(from, text) {
   // ── Connect via link code ─────────────────────────────────────────────────
   if (text.startsWith('connect_')) {
     const code = text.slice('connect_'.length)
-    let decodedUserId
-    try {
-      decodedUserId = Buffer.from(code, 'base64').toString()
-    } catch (err) {
-      await sendMessage(from, '❌ Invalid connect code. Please try again from the app.')
-      return
+    const result = await connectUserByCode(code, from)
+    if (result.ok) {
+      await sendMessage(from,
+        `✅ *WhatsApp Connected!*\n` +
+        `──────────────────\n` +
+        `Welcome to FinFlow! 🎉\n\n` +
+        `Your WhatsApp is now linked.\n` +
+        `Start adding transactions:\n\n` +
+        `💬 _"spent 500 on lunch"_\n` +
+        `💬 _"received 50000 salary"_\n` +
+        `📷 Or send a receipt photo\n\n` +
+        `Type *help* to see all commands.\n` +
+        `──────────────────`
+      )
+    } else {
+      await sendMessage(from,
+        `❌ *Invalid or expired connect code*\n\n` +
+        `Please try again:\n` +
+        `1️⃣  Open FinFlow app\n` +
+        `2️⃣  Go to Settings → WhatsApp\n` +
+        `3️⃣  Tap *Open WhatsApp* again`
+      )
     }
-    const ok = await connectUser(decodedUserId, from)
-    if (!ok) {
-      await sendMessage(from, '❌ Could not connect account. Please try again.')
-      return
-    }
-    await sendMessage(from,
-      `✅ *WhatsApp Connected!*\n` +
-      `──────────────────\n` +
-      `Welcome to FinFlow! 🎉\n` +
-      `Your WhatsApp is now linked.\n` +
-      `Start adding transactions:\n` +
-      `💬 _"spent 500 on lunch"_\n` +
-      `📷 Or send a receipt photo\n` +
-      `Type *help* to see all commands.\n` +
-      `──────────────────`
-    )
     return
   }
 
@@ -163,8 +164,9 @@ async function handleTextMessage(from, text) {
       `*Account not linked* 🔗\n\n` +
       `To connect your FinFlow account:\n` +
       `1️⃣  Open the FinFlow app\n` +
-      `2️⃣  Settings → Connect WhatsApp\n` +
-      `3️⃣  Enter your number: *+${from}*`
+      `2️⃣  Go to Settings → WhatsApp\n` +
+      `3️⃣  Tap *Open WhatsApp* button\n\n` +
+      `You will be connected automatically!`
     )
     return
   }
