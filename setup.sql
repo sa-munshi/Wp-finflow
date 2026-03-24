@@ -87,3 +87,9 @@ SELECT column_name, data_type, is_nullable
 FROM information_schema.columns
 WHERE table_name = 'settings'
 AND column_name = 'whatsapp_phone';
+ALTER TABLE settings
+ADD COLUMN IF NOT EXISTS whatsapp_connect_code TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_settings_wa_connect_code
+ON settings(whatsapp_connect_code)
+WHERE whatsapp_connect_code IS NOT NULL;
