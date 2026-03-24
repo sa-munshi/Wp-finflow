@@ -18,7 +18,8 @@ const { sendMessage, sendImage, sendButtons, markRead, formatINR } = require('./
 const {
   getSession, setSession, clearSession,
   getPreview, setPreview,
-  getPendingBulk, setPendingBulk, clearPendingBulk
+  getPendingBulk, setPendingBulk, clearPendingBulk,
+  checkNlpLimit, checkScanLimit
 } = require('./session')
 
 const app = express()
@@ -303,6 +304,19 @@ async function handleTextMessage(from, text) {
   }
 
   // ── Parse as transaction ──────────────────────────────────────────────────
+
+  // Rate limit: 30 NLP (Sarvam) requests per 5 hours per phone number
+  const nlpCheck = checkNlpLimit(from)
+  if (!nlpCheck.allowed) {
+    await sendMessage(from,
+      `⏱️ *Too many requests*\n\n` +
+      `You've reached the limit of 30 transactions per 5 hours.\n` +
+      `Please try again in *${nlpCheck.resetInMinutes} minute${nlpCheck.resetInMinutes !== 1 ? 's' : ''}*.\n\n` +
+      `_This limit keeps the service fast and fair for everyone._`
+    )
+    return
+  }
+
   await sendMessage(from, '⏳ _Processing..._')
   const parsed = await parseTextWithAI(text)
 
@@ -333,6 +347,18 @@ async function handlePhotoMessage(from, image) {
   const user = await getUserByPhone(from)
   if (!user) {
     await sendMessage(from, '🔗 Please link your account first. Type *help* for instructions.')
+    return
+  }
+
+  // Rate limit: 15 receipt scans (Gemini) per 5 hours per phone number
+  const scanCheck = checkScanLimit(from)
+  if (!scanCheck.allowed) {
+    await sendMessage(from,
+      `⏱️ *Too many receipt scans*\n\n` +
+      `You've reached the limit of 15 receipt scans per 5 hours.\n` +
+      `Please try again in *${scanCheck.resetInMinutes} minute${scanCheck.resetInMinutes !== 1 ? 's' : ''}*.\n\n` +
+      `_You can still add transactions by typing them manually._`
+    )
     return
   }
 
