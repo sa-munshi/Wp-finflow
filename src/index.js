@@ -4,6 +4,7 @@ const fetch = require('node-fetch')
 const { parseTextWithAI, parsePhotoWithAI, downloadWhatsAppMedia } = require('./ai')
 const {
   getUserByPhone,
+  connectUser,
   disconnectUser,
   saveTransaction,
   getTransactions,
@@ -112,6 +113,36 @@ async function processMessage(from, message) {
 // ─── Handle text messages ─────────────────────────────────────────────────────
 async function handleTextMessage(from, text) {
   const lower = text.toLowerCase().trim()
+
+  // ── Connect via link code ─────────────────────────────────────────────────
+  if (text.startsWith('connect_')) {
+    const code = text.slice('connect_'.length)
+    let decodedUserId
+    try {
+      decodedUserId = Buffer.from(code, 'base64').toString()
+    } catch (err) {
+      await sendMessage(from, '❌ Invalid connect code. Please try again from the app.')
+      return
+    }
+    const ok = await connectUser(decodedUserId, from)
+    if (!ok) {
+      await sendMessage(from, '❌ Could not connect account. Please try again.')
+      return
+    }
+    await sendMessage(from,
+      `✅ *WhatsApp Connected!*\n` +
+      `──────────────────\n` +
+      `Welcome to FinFlow! 🎉\n` +
+      `Your WhatsApp is now linked.\n` +
+      `Start adding transactions:\n` +
+      `💬 _"spent 500 on lunch"_\n` +
+      `📷 Or send a receipt photo\n` +
+      `Type *help* to see all commands.\n` +
+      `──────────────────`
+    )
+    return
+  }
+
   const user = await getUserByPhone(from)
 
   // ── Not connected ─────────────────────────────────────────────────────────
@@ -587,6 +618,37 @@ async function handleButtonReply(from, buttonId) {
     return
   }
 }
+
+// ─── Send notification ────────────────────────────────────────────────────────
+app.post('/send-notification', async (req, res) => {
+  try {
+    if (req.headers['x-bot-secret'] !== process.env.WEBHOOK_SECRET) {
+      return res.sendStatus(403)
+    }
+
+    const { phone, type } = req.body
+
+    if (!phone || !type) {
+      return res.status(400).json({ ok: false, error: 'phone and type are required' })
+    }
+
+    if (type === 'disconnected') {
+      await sendMessage(phone,
+        `🔗 *Account Disconnected*\n` +
+        `──────────────────\n` +
+        `Your WhatsApp has been unlinked from FinFlow.\n` +
+        `Your data is safe in the app.\n` +
+        `To reconnect: Settings → Connect WhatsApp\n` +
+        `──────────────────`
+      )
+    }
+
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[Send Notification Error]', err.message)
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
 
 // ─── Start server ─────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

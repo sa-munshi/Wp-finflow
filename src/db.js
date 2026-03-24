@@ -55,6 +55,26 @@ async function getUserByPhone(phone) {
   }
 }
 
+// ─── Connect user (set whatsapp_phone by user_id) ────────────────────────────
+async function connectUser(userId, phone) {
+  try {
+    const normalized = normalizePhone(phone)
+    const { error } = await getSupabase()
+      .from('settings')
+      .update({ whatsapp_phone: normalized })
+      .eq('user_id', userId)
+
+    if (error) {
+      console.error('[DB] connectUser error:', error.message)
+      return false
+    }
+    return true
+  } catch (err) {
+    console.error('[DB] connectUser error:', err.message)
+    return false
+  }
+}
+
 // ─── Disconnect user (clear whatsapp_phone) ──────────────────────────────────
 async function disconnectUser(phone) {
   try {
@@ -191,6 +211,7 @@ function markWelcomeSeen(phone) {
 
 module.exports = {
   getUserByPhone,
+  connectUser,
   disconnectUser,
   saveTransaction,
   getTransactions,
