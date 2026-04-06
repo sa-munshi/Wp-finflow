@@ -37,6 +37,13 @@ function getISTMonthPrefix() {
   return getISTNow().toISOString().slice(0, 7)
 }
 
+function getPreviousISTMonthPrefix() {
+  const now = getISTNow()
+  now.setUTCDate(1)
+  now.setUTCMonth(now.getUTCMonth() - 1)
+  return now.toISOString().slice(0, 7)
+}
+
 // ─── Get user by WhatsApp phone ──────────────────────────────────────────────
 async function getUserByPhone(phone) {
   try {
@@ -270,6 +277,7 @@ module.exports = {
   getMonthlyBalance,
   getReportSignedUrl,
   getISTMonthPrefix,
+  getPreviousISTMonthPrefix,
   hasSeenWelcome,
   markWelcomeSeen
 }
