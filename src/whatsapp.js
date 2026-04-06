@@ -83,6 +83,27 @@ async function sendButtons(to, bodyText, buttons) {
   }
 }
 
+// Send a document message (e.g. PDF) with optional caption
+async function sendDocument(to, documentUrl, filename, caption = '') {
+  try {
+    const res = await fetch(getApiUrl(), {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to,
+        type: 'document',
+        document: { link: documentUrl, filename, caption }
+      })
+    })
+    const data = await res.json()
+    if (data.error) console.error('[WA Document Error]', data.error)
+    return data
+  } catch (err) {
+    console.error('[WA Document Failed]', err.message)
+  }
+}
+
 // Mark message as read
 async function markRead(messageId) {
   try {
@@ -104,4 +125,4 @@ function formatINR(amount) {
   return `₹${Number(amount).toLocaleString('en-IN')}`
 }
 
-module.exports = { sendMessage, sendImage, sendButtons, markRead, formatINR }
+module.exports = { sendMessage, sendImage, sendDocument, sendButtons, markRead, formatINR }

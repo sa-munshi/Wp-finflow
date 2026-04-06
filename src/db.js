@@ -232,6 +232,22 @@ async function getMonthlyBalance(userId) {
   }
 }
 
+// ─── Get signed URL for monthly report PDF ───────────────────────────────────
+async function getReportSignedUrl(userId, fileName) {
+  try {
+    const { data, error } = await getSupabase()
+      .storage
+      .from('reports')
+      .createSignedUrl(`${userId}/${fileName}`, 3600)
+
+    if (error || !data?.signedUrl) return null
+    return data.signedUrl
+  } catch (err) {
+    console.error('[DB] getReportSignedUrl error:', err.message)
+    return null
+  }
+}
+
 // ─── Welcome seen tracker (in-memory, resets on restart) ─────────────────────
 const welcomeSeen = new Set()
 
@@ -252,6 +268,7 @@ module.exports = {
   getTransactions,
   getBalance,
   getMonthlyBalance,
+  getReportSignedUrl,
   hasSeenWelcome,
   markWelcomeSeen
 }

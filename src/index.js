@@ -11,10 +11,11 @@ const {
   getTransactions,
   getBalance,
   getMonthlyBalance,
+  getReportSignedUrl,
   hasSeenWelcome,
   markWelcomeSeen
 } = require('./db')
-const { sendMessage, sendImage, sendButtons, markRead, formatINR } = require('./whatsapp')
+const { sendMessage, sendImage, sendDocument, sendButtons, markRead, formatINR } = require('./whatsapp')
 const {
   getSession, setSession, clearSession,
   getPreview, setPreview,
@@ -191,6 +192,7 @@ async function handleTextMessage(from, text) {
       `• balance — All time summary\n` +
       `• monthly — This month summary\n` +
       `• recent — Last 5 transactions\n` +
+      `• report — Download monthly PDF report\n` +
       `• disconnect — Unlink account\n` +
       `• help — Show this message\n\n` +
       `_Supports English, Hindi & Bengali_`
@@ -250,6 +252,28 @@ async function handleTextMessage(from, text) {
       `🏦  Balance:  *${formatINR(m.balance)}*\n` +
       `📈  Savings:  ${savingsRate}%\n` +
       `──────────────────`
+    )
+    return
+  }
+
+  // Report
+  if (lower === 'report' || lower === '/report') {
+    const now = new Date()
+    const yyyy = now.getUTCFullYear()
+    const mm = String(now.getUTCMonth() + 1).padStart(2, '0')
+    const monthLabel = `${yyyy}-${mm}`
+    const fileName = `${monthLabel}.pdf`
+
+    const signedUrl = await getReportSignedUrl(user.user_id, fileName)
+    if (!signedUrl) {
+      await sendMessage(from,
+        `📊 No report available yet. Reports are generated on the 1st of each month!`
+      )
+      return
+    }
+
+    await sendDocument(from, signedUrl, fileName,
+      `📊 Your FinFlow report for ${monthLabel} is ready!`
     )
     return
   }
