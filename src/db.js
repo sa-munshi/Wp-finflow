@@ -150,7 +150,7 @@ async function saveTransaction(userId, parsed) {
         category: parsed.category || 'Other',
         note: parsed.note || '',
         date: parsed.date || getISTDateString(),
-        created_at: istTime.toISOString()
+        created_at: istTime.toISOString().replace('Z', '+05:30')
       })
       .select()
       .single()
