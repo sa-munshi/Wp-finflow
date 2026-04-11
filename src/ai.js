@@ -2,6 +2,7 @@ const fetch = require('node-fetch')
 
 // ─── Get today's date in IST (Asia/Kolkata) as YYYY-MM-DD ────────────────────
 function getTodayIST() {
+  // en-CA locale formats dates as YYYY-MM-DD (ISO 8601)
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date())
 }
 

@@ -22,7 +22,10 @@ function normalizePhone(phone) {
 }
 
 // ─── Get current IST date/time ───────────────────────────────────────────────
-// India does not observe DST, so Asia/Kolkata is always UTC+5:30
+// India does not observe DST, so Asia/Kolkata is always UTC+5:30.
+// Returns a Date whose UTC components hold IST values, so that
+// .toISOString() yields IST date/time strings (used by getISTDateString,
+// getISTMonthPrefix, etc.). This Date does NOT represent the true UTC instant.
 function getISTNow() {
   const now = new Date()
   const parts = new Intl.DateTimeFormat('en-US', {
