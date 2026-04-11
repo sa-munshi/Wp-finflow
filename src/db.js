@@ -22,11 +22,10 @@ function normalizePhone(phone) {
 }
 
 // ─── Get current IST date/time ───────────────────────────────────────────────
-// India does not observe DST, so fixed +5:30 offset is safe
+// India does not observe DST, so Asia/Kolkata is always UTC+5:30
 function getISTNow() {
   const now = new Date()
-  const istOffset = 5.5 * 60 * 60 * 1000
-  return new Date(now.getTime() + istOffset)
+  return new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }))
 }
 
 function getISTDateString() {

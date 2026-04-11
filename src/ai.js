@@ -1,9 +1,16 @@
 const fetch = require('node-fetch')
 
+// ─── Get today's date in IST (Asia/Kolkata) ──────────────────────────────────
+function getTodayIST() {
+  const now = new Date()
+  const istDate = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }))
+  return istDate.toISOString().split('T')[0]
+}
+
 // ─── Parse text with Sarvam-m ────────────────────────────────────────────────
 async function parseTextWithAI(text) {
   try {
-    const today = new Date().toISOString().split('T')[0]
+    const today = getTodayIST()
     const response = await fetch('https://api.sarvam.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -129,7 +136,7 @@ For SINGLE transaction return:
 // ─── Parse receipt photo with Gemini ─────────────────────────────────────────
 async function parsePhotoWithAI(base64Image, mimeType = 'image/jpeg') {
   try {
-    const today = new Date().toISOString().split('T')[0]
+    const today = getTodayIST()
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
