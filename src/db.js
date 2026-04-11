@@ -25,7 +25,17 @@ function normalizePhone(phone) {
 // India does not observe DST, so Asia/Kolkata is always UTC+5:30
 function getISTNow() {
   const now = new Date()
-  return new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }))
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false
+  }).formatToParts(now)
+  const get = type => parts.find(p => p.type === type).value
+  return new Date(Date.UTC(
+    Number(get('year')), Number(get('month')) - 1, Number(get('day')),
+    Number(get('hour')), Number(get('minute')), Number(get('second'))
+  ))
 }
 
 function getISTDateString() {

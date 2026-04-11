@@ -1,10 +1,8 @@
 const fetch = require('node-fetch')
 
-// ─── Get today's date in IST (Asia/Kolkata) ──────────────────────────────────
+// ─── Get today's date in IST (Asia/Kolkata) as YYYY-MM-DD ────────────────────
 function getTodayIST() {
-  const now = new Date()
-  const istDate = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }))
-  return istDate.toISOString().split('T')[0]
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date())
 }
 
 // ─── Parse text with Sarvam-m ────────────────────────────────────────────────
