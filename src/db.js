@@ -216,13 +216,15 @@ async function getBalance(userId) {
 async function getMonthlyBalance(userId) {
   try {
     const monthPrefix = getISTMonthPrefix()
+    const [year, month] = monthPrefix.split('-').map(Number)
+    const lastDay = new Date(year, month, 0).getDate()
 
     const { data, error } = await getSupabase()
       .from('transactions')
       .select('amount, type')
       .eq('user_id', userId)
       .gte('date', `${monthPrefix}-01`)
-      .lte('date', `${monthPrefix}-31`)
+      .lte('date', `${monthPrefix}-${String(lastDay).padStart(2, '0')}`)
 
     if (error) {
       console.error('[DB] getMonthlyBalance error:', error.message)
