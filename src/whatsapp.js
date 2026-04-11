@@ -127,6 +127,7 @@ function formatINR(amount) {
 
 function formatDateIST(dateStr) {
   const date = new Date(dateStr)
+  if (isNaN(date.getTime())) return dateStr
   return date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })
 }
 
