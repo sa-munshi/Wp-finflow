@@ -268,81 +268,6 @@ function markWelcomeSeen(phone) {
   welcomeSeen.add(phone)
 }
 
-// ─── Realtime: watch for app-side disconnections ─────────────────────────────
-// Keeps a local map of user_id → phone so we can detect when whatsapp_phone
-// is set to null (web-app disconnect) and notify the user automatically.
-
-const connectedUsers = new Map()          // user_id → phone
-const recentBotDisconnects = new Set()    // phones disconnected by the bot itself
-
-/**
- * Mark a phone as "just disconnected by the bot" so the Realtime handler
- * won't send a duplicate notification.  The flag auto-expires after 15 s.
- */
-function markBotDisconnect(phone) {
-  const normalized = normalizePhone(phone)
-  recentBotDisconnects.add(normalized)
-  setTimeout(() => recentBotDisconnects.delete(normalized), 15_000)
-}
-
-/**
- * Load every row that currently has a whatsapp_phone, then open a Supabase
- * Realtime channel so we are notified whenever the column changes.
- *
- * @param {(phone: string) => void} onDisconnect – called with the phone number
- *        when a user is disconnected from the web app (not from the bot).
- */
-async function subscribeToDisconnections(onDisconnect) {
-  try {
-    // 1. Seed the local map with current connected users
-    const { data, error } = await getSupabase()
-      .from('settings')
-      .select('user_id, whatsapp_phone')
-      .not('whatsapp_phone', 'is', null)
-
-    if (error) {
-      console.error('[Realtime] Failed to seed connected users:', error.message)
-    } else if (data) {
-      for (const row of data) {
-        connectedUsers.set(row.user_id, normalizePhone(row.whatsapp_phone))
-      }
-      console.log(`[Realtime] Loaded ${connectedUsers.size} connected user(s)`)
-    }
-
-    // 2. Subscribe to UPDATE events on the settings table
-    getSupabase()
-      .channel('settings-disconnect-watch')
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'settings' },
-        (payload) => {
-          const newRow = payload.new
-          const userId = newRow?.user_id
-          if (!userId) return
-
-          if (newRow.whatsapp_phone) {
-            // User connected (or phone changed) → keep local map in sync
-            connectedUsers.set(userId, normalizePhone(newRow.whatsapp_phone))
-          } else {
-            // whatsapp_phone was set to null → user disconnected
-            const oldPhone = connectedUsers.get(userId)
-            connectedUsers.delete(userId)
-
-            if (oldPhone && !recentBotDisconnects.has(oldPhone)) {
-              console.log(`[Realtime] Detected app-side disconnect for ${oldPhone}`)
-              onDisconnect(oldPhone)
-            }
-          }
-        }
-      )
-      .subscribe((status) => {
-        console.log(`[Realtime] Subscription status: ${status}`)
-      })
-  } catch (err) {
-    console.error('[Realtime] subscribeToDisconnections error:', err.message)
-  }
-}
-
 module.exports = {
   getUserByPhone,
   connectUser,
@@ -356,7 +281,5 @@ module.exports = {
   getISTMonthPrefix,
   getPreviousISTMonthPrefix,
   hasSeenWelcome,
-  markWelcomeSeen,
-  markBotDisconnect,
-  subscribeToDisconnections
+  markWelcomeSeen
 }
