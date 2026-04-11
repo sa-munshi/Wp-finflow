@@ -17,7 +17,7 @@ const {
   hasSeenWelcome,
   markWelcomeSeen
 } = require('./db')
-const { sendMessage, sendImage, sendDocument, sendButtons, markRead, formatINR } = require('./whatsapp')
+const { sendMessage, sendImage, sendDocument, sendButtons, markRead, formatINR, formatDateIST } = require('./whatsapp')
 const {
   getSession, setSession, clearSession,
   getPreview, setPreview,
@@ -286,7 +286,7 @@ async function handleTextMessage(from, text) {
     }
     const list = txs.map(t => {
       const emoji = t.type === 'income' ? '🟢' : '🔴'
-      return `${emoji}  *${formatINR(t.amount)}*  ${t.category}\n    📝 ${t.note || '—'}  ·  📅 ${t.date}`
+      return `${emoji}  *${formatINR(t.amount)}*  ${t.category}\n    📝 ${t.note || '—'}  ·  📅 ${formatDateIST(t.date)}`
     }).join('\n\n')
 
     await sendMessage(from,
@@ -448,7 +448,7 @@ async function saveAndConfirm(from, parsed, userId) {
       `──────────────────\n` +
       `${typeEmoji}  *${formatINR(parsed.amount)}*\n` +
       `📂  ${parsed.category}  ·  ${typeLabel}\n` +
-      `📅  ${parsed.date}\n` +
+      `📅  ${formatDateIST(parsed.date)}\n` +
       `📝  ${parsed.note || '—'}\n` +
       `──────────────────\n` +
       `_Open the app to view all transactions_`
@@ -544,7 +544,7 @@ async function showTransactionPreview(from, parsed, userId) {
     `💵  *${formatINR(parsed.amount)}*\n` +
     `📊  ${typeLabel}\n` +
     `📂  ${parsed.category}\n` +
-    `📅  ${parsed.date}\n` +
+    `📅  ${formatDateIST(parsed.date)}\n` +
     `📝  ${parsed.note || '—'}\n` +
     `──────────────────\n` +
     `Confirm to save?`
@@ -635,7 +635,7 @@ async function handleButtonReply(from, buttonId) {
       `──────────────────\n` +
       `${typeEmoji}  *${formatINR(p.amount)}*\n` +
       `📂  ${p.category}  ·  ${typeLabel}\n` +
-      `📅  ${p.date}\n` +
+      `📅  ${formatDateIST(p.date)}\n` +
       `📝  ${p.note || '—'}\n` +
       `──────────────────\n` +
       `_Open the app to view all transactions_`

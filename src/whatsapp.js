@@ -125,4 +125,9 @@ function formatINR(amount) {
   return `₹${Number(amount).toLocaleString('en-IN')}`
 }
 
-module.exports = { sendMessage, sendImage, sendDocument, sendButtons, markRead, formatINR }
+function formatDateIST(dateStr) {
+  const date = new Date(dateStr)
+  return date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })
+}
+
+module.exports = { sendMessage, sendImage, sendDocument, sendButtons, markRead, formatINR, formatDateIST }

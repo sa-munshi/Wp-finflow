@@ -1,9 +1,10 @@
 const fetch = require('node-fetch')
+const { getISTDateString } = require('./db')
 
 // ─── Parse text with Sarvam-m ────────────────────────────────────────────────
 async function parseTextWithAI(text) {
   try {
-    const today = new Date().toISOString().split('T')[0]
+    const today = getISTDateString()
     const response = await fetch('https://api.sarvam.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -129,7 +130,7 @@ For SINGLE transaction return:
 // ─── Parse receipt photo with Gemini ─────────────────────────────────────────
 async function parsePhotoWithAI(base64Image, mimeType = 'image/jpeg') {
   try {
-    const today = new Date().toISOString().split('T')[0]
+    const today = getISTDateString()
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
