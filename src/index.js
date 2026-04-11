@@ -191,8 +191,8 @@ async function handleTextMessage(from, text) {
       `*Commands:*\n` +
       `• preview on — Enable transaction preview\n` +
       `• preview off — Disable preview (default)\n` +
-      `• balance — All time summary\n` +
-      `• monthly — This month summary\n` +
+      `• balance — This month summary\n` +
+      `• balance all — All time summary\n` +
       `• recent — Last 5 transactions\n` +
       `• report — Download monthly PDF report\n` +
       `• disconnect — Unlink account\n` +
@@ -219,9 +219,9 @@ async function handleTextMessage(from, text) {
     return
   }
 
-  // Balance
-  const balanceCommands = ['balance', '/balance', 'check my balance', 'check balance']
-  if (balanceCommands.includes(lower)) {
+  // Balance all (all-time summary) — check before default balance
+  const balanceAllCommands = ['balance all', '/balance all', 'alltime', '/alltime']
+  if (balanceAllCommands.includes(lower)) {
     const b = await getBalance(user.user_id)
     const savingsRate = b.income > 0
       ? Math.round(((b.income - b.expense) / b.income) * 100)
@@ -239,21 +239,21 @@ async function handleTextMessage(from, text) {
     return
   }
 
-  // Monthly
-  if (lower === 'monthly' || lower === '/monthly') {
+  // Balance (default = current month)
+  const balanceCommands = ['balance', '/balance', 'check my balance', 'check balance', 'monthly', '/monthly']
+  if (balanceCommands.includes(lower)) {
     const m = await getMonthlyBalance(user.user_id)
     const month = new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })
     const savingsRate = m.income > 0
       ? Math.round(((m.income - m.expense) / m.income) * 100)
       : 0
     await sendMessage(from,
-      `📅 *${month}*\n` +
-      `──────────────────\n` +
-      `🟢  Income:   *${formatINR(m.income)}*\n` +
-      `🔴  Expense:  *${formatINR(m.expense)}*\n` +
-      `🏦  Balance:  *${formatINR(m.balance)}*\n` +
-      `📈  Savings:  ${savingsRate}%\n` +
-      `──────────────────`
+      `💰 *Balance — ${month}*\n\n` +
+      `🟢 Income:       *${formatINR(m.income)}*\n` +
+      `🔴 Expense:      *${formatINR(m.expense)}*\n` +
+      `🏦 Net:          *${formatINR(m.balance)}*\n` +
+      `📈 Savings rate: ${savingsRate}%\n\n` +
+      `_— This month_`
     )
     return
   }
